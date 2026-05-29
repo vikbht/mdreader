@@ -1,0 +1,97 @@
+name: Release MDReader
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: # Allows manual trigger from the GitHub Actions tab
+
+permissions:
+  contents: write # Required to create GitHub Releases and upload zip assets
+
+jobs:
+  build:
+    name: Build & Release
+    runs-on: macos-14 # Runs on modern Apple Silicon macOS runners
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Verify macOS Environment
+        run: |
+          echo "=== Swift Compiler version ==="
+          swiftc --version
+          echo "=== macOS SDK path ==="
+          xcode-select -p
+
+      - name: Compile and Package App Bundle
+        run: |
+          mkdir -p build/MDReader.app/Contents/MacOS
+          mkdir -p build/MDReader.app/Contents/Resources
+          
+          # Generate Retina Icon Bundle
+          mkdir -p AppIcon.iconset
+          sips -s format png -z 16 16     src/resources/AppIcon.png --out AppIcon.iconset/icon_16x16.png
+          sips -s format png -z 32 32     src/resources/AppIcon.png --out AppIcon.iconset/icon_16x16@2x.png
+          sips -s format png -z 32 32     src/resources/AppIcon.png --out AppIcon.iconset/icon_32x32.png
+          sips -s format png -z 64 64     src/resources/AppIcon.png --out AppIcon.iconset/icon_32x32@2x.png
+          sips -s format png -z 128 128   src/resources/AppIcon.png --out AppIcon.iconset/icon_128x128.png
+          sips -s format png -z 256 256   src/resources/AppIcon.png --out AppIcon.iconset/icon_128x128@2x.png
+          sips -s format png -z 256 256   src/resources/AppIcon.png --out AppIcon.iconset/icon_256x256.png
+          sips -s format png -z 512 512   src/resources/AppIcon.png --out AppIcon.iconset/icon_256x256@2x.png
+          sips -s format png -z 512 512   src/resources/AppIcon.png --out AppIcon.iconset/icon_512x512.png
+          sips -s format png -z 1024 1024 src/resources/AppIcon.png --out AppIcon.iconset/icon_512x512@2x.png
+          
+          iconutil -c icns AppIcon.iconset
+          mv AppIcon.icns build/MDReader.app/Contents/Resources/AppIcon.icns
+          rm -rf AppIcon.iconset
+          
+          # Compile native Swift executable with production optimizations (-O)
+          swiftc -O src/main.swift -o build/MDReader.app/Contents/MacOS/MDReader
+          
+          # Package resources and plist
+          cp Info.plist build/MDReader.app/Contents/
+          cp src/resources/template.html build/MDReader.app/Contents/Resources/
+          cp src/resources/style.css build/MDReader.app/Contents/Resources/
+          cp src/resources/marked.min.js build/MDReader.app/Contents/Resources/
+          cp src/resources/prism.min.js build/MDReader.app/Contents/Resources/
+          
+          # Deep Ad-hoc Sign the App Bundle (Allows it to launch natively on user machines)
+          codesign --force --deep --sign - build/MDReader.app
+
+      - name: Compress App Bundle into Zip
+        run: |
+          cd build
+          # -y preserves symbolic links inside the macOS app bundle structure!
+          zip -y -r ../MDReader.zip MDReader.app
+          cd ..
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MDReader.zip
+          draft: false
+          prerelease: false
+          name: MDReader ${{ github.ref_name || 'Workflow Dispatch Build' }}
+          body: |
+            🚀 **MDReader Native macOS Release**
+            
+            This is a fully compiled, signed, and packaged production release of **MDReader**—your lightweight native macOS Markdown previewer.
+            
+            ### 📦 Files Included:
+            * **`MDReader.zip`**: The native app bundle folder.
+            
+            ### 🛠️ Installation Steps:
+            1. **Download**: Click `MDReader.zip` below.
+            2. **Unzip**: Double-click to extract the `MDReader.app` folder.
+            3. **Install**: Drag `MDReader.app` into your **`/Applications/`** folder.
+            
+            ### 🖱️ Setup Right-Click Finder Services:
+            The first time you drag it in, run these commands in Terminal to register the Service with macOS Finder and update context caches:
+            ```bash
+            /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/MDReader.app
+            /System/Library/CoreServices/pbs -update
+            ```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
