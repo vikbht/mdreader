@@ -1,0 +1,9 @@
+# macOS System files
+.DS_Store
+
+# MDReader Build outputs
+build/
+
+# Temporary assets
+AppIcon.iconset/
+AppIcon.icns
