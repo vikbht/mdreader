@@ -2,6 +2,14 @@
 
 **MDReader** is a lightweight, native macOS utility designed to preview Markdown (`.md` or `.markdown`) files instantly in a translucent, glassmorphic floating window. Inspired by the speed and feel of macOS *Quick Look*, it renders technical Markdown—including Mermaid diagrams, LaTeX math, and GitHub alerts—100% offline without launching heavy editors or browser tabs.
 
+<p align="center">
+  <img src="docs/screenshots/preview-glass-dark.png" alt="MDReader Glass Dark theme with YAML frontmatter card and GitHub-style alerts" width="760" />
+</p>
+
+| Mermaid Diagrams & KaTeX Math (Nord) | Reading Mode & Outline Sidebar (Sepia) |
+| :---: | :---: |
+| <img src="docs/screenshots/preview-nord-math.png" alt="MDReader Nord theme rendering Mermaid flowchart and KaTeX equations" width="420" /> | <img src="docs/screenshots/preview-sepia-outline.png" alt="MDReader Sepia theme with slide-out Outline sidebar" width="420" /> |
+
 ---
 
 ## ✨ Features

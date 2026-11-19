@@ -221,7 +221,7 @@ body {
   border-radius: 4px;
   color: var(--accent);
   background: var(--accent-light);
-  border: 1px solid rgba(110, 68, 255, 0.15);
+  border: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
@@ -288,7 +288,7 @@ body {
 .icon-button.active {
   color: var(--accent);
   background: var(--accent-light);
-  border-color: rgba(110, 68, 255, 0.35);
+  border-color: var(--accent);
 }
 
 /* Theme Picker Popover */
@@ -998,7 +998,7 @@ pre:hover .copy-button {
   font-weight: 600;
   color: var(--accent);
   background: var(--accent-light);
-  border: 1px solid rgba(110, 68, 255, 0.2);
+  border: 1px solid var(--border-color);
 }
 
 /* ==========================================================================

@@ -443,7 +443,7 @@
                 strict: false
               });
               const safeMathHtml = typeof DOMPurify !== 'undefined'
-                ? DOMPurify.sanitize(rawMathHtml, { USE_PROFILES: { html: true, mathMl: true } })
+                ? DOMPurify.sanitize(rawMathHtml, { USE_PROFILES: { html: true, mathMl: true, svg: true } })
                 : rawMathHtml;
 
               const wrapper = document.createElement(item.displayMode ? 'div' : 'span');
