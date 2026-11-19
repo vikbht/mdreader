@@ -213,6 +213,101 @@ body {
   transform: scale(0.95);
 }
 
+.icon-button.active {
+  color: var(--accent);
+  background: var(--accent-light);
+  border-color: rgba(110, 68, 255, 0.35);
+}
+
+/* ==========================================================================
+   In-Document Find Bar
+   ========================================================================== */
+
+.find-bar {
+  position: fixed;
+  top: calc(var(--header-height) + 10px);
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background-color: var(--bg-header);
+  backdrop-filter: blur(25px) saturate(180%);
+  -webkit-backdrop-filter: blur(25px) saturate(180%);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+  z-index: 105;
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.find-bar.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+#find-input {
+  width: 190px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  outline: none;
+}
+
+#find-input:focus {
+  border-color: var(--accent);
+}
+
+.find-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 42px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.find-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-smooth);
+}
+
+.find-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+mark.find-highlight {
+  background: rgba(255, 212, 59, 0.35);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+mark.find-highlight.current {
+  background: rgba(255, 169, 77, 0.85);
+  color: #111;
+  box-shadow: 0 0 0 1px rgba(255, 146, 43, 0.9);
+}
+
 /* ==========================================================================
    Main Markdown Container
    ========================================================================== */
@@ -465,12 +560,12 @@ body {
 }
 
 /* ==========================================================================
-   Code Blocks & Prism Syntax Highlighting
+   Code Blocks & Highlight.js Syntax Highlighting
    ========================================================================== */
 
 .markdown-body pre {
   margin-bottom: 20px;
-  padding: 16px;
+  padding: 18px 16px 16px 16px;
   background: var(--bg-code) !important;
   border-radius: 10px;
   overflow-x: auto;
@@ -486,6 +581,24 @@ body {
   border: none !important;
   padding: 0 !important;
   text-shadow: none !important;
+}
+
+.code-lang-label {
+  position: absolute;
+  top: 7px;
+  right: 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(139, 148, 158, 0.75);
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+pre:hover .code-lang-label {
+  opacity: 0;
 }
 
 /* Code Copy Button */
@@ -519,69 +632,73 @@ pre:hover .copy-button {
   opacity: 1;
 }
 
-/* Syntax Highlighting Colors */
-.token.comment,
-.token.prolog,
-.token.doctype,
-.token.cdata {
+/* Highlight.js Syntax Theme (GitHub Dark inspired) */
+.hljs {
+  color: #e6edf3;
+  background: transparent;
+}
+
+.hljs-comment,
+.hljs-quote,
+.hljs-doctag {
   color: var(--token-comment);
   font-style: italic;
 }
 
-.token.punctuation {
-  color: #8b949e;
-}
-
-.token.property,
-.token.tag,
-.token.boolean,
-.token.number,
-.token.constant,
-.token.symbol,
-.token.deleted {
-  color: var(--token-number);
-}
-
-.token.selector,
-.token.attr-name,
-.token.string,
-.token.char,
-.token.builtin,
-.token.inserted {
-  color: var(--token-string);
-}
-
-.token.operator,
-.token.entity,
-.token.url,
-.language-css .token.string,
-.style .token.string {
-  color: var(--token-operator);
-}
-
-.token.atrule,
-.token.attr-value,
-.token.keyword {
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-type,
+.hljs-template-tag,
+.hljs-deletion {
   color: var(--token-keyword);
 }
 
-.token.function,
-.token.class-name {
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-attribute,
+.hljs-meta .hljs-string {
+  color: var(--token-string);
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag .hljs-attr,
+.hljs-attr,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+  color: var(--token-number);
+}
+
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.function_,
+.hljs-section {
   color: var(--token-function);
 }
 
-.token.regex,
-.token.important,
-.token.variable {
-  color: #ffaa57;
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-params,
+.hljs-name,
+.hljs-meta {
+  color: #ffa657;
 }
 
-.token.bold {
-  font-weight: bold;
+.hljs-operator,
+.hljs-punctuation {
+  color: #c9d1d9;
 }
 
-.token.italic {
+.hljs-emphasis {
   font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 700;
 }
 
 /* ==========================================================================
@@ -681,4 +798,51 @@ pre:hover .copy-button {
 .toc-overlay.active {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* ==========================================================================
+   Print & PDF Export Styling
+   ========================================================================== */
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #111111 !important;
+  }
+
+  .app-header,
+  .find-bar,
+  .toc-sidebar,
+  .toc-overlay,
+  .copy-button,
+  .code-lang-label {
+    display: none !important;
+  }
+
+  .content-container {
+    max-width: 100%;
+    padding: 0;
+  }
+
+  .markdown-body {
+    color: #111111 !important;
+  }
+
+  .markdown-body h1 {
+    background: none !important;
+    -webkit-text-fill-color: #111111 !important;
+    color: #111111 !important;
+  }
+
+  .markdown-body pre {
+    background: #f6f8fa !important;
+    border: 1px solid #d0d7de !important;
+    box-shadow: none !important;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .markdown-body pre code {
+    color: #24292f !important;
+  }
 }

@@ -1,84 +1,80 @@
 # MDReader Premium Test Document
 
-Welcome to your **MDReader** preview! This file displays all the rich elements and custom styling supported by your new lightweight macOS Markdown viewer.
+Welcome to your **MDReader** preview! This file exercises headings, lists, tables, multi-language syntax highlighting, relative images, links, and XSS sanitization.
 
 - [x] Lightweight Swift/SwiftUI core (~30MB memory)
-- [x] Glassmorphic translucent backdrop blurs
-- [x] Auto-reload file watcher
-- [x] Zero-dependency offline rendering
+- [x] Glassmorphic translucent backdrop blurs & toggleable Always-on-Top pin
+- [x] Atomic-save-safe hot-reload file watcher with scroll preservation
+- [x] DOMPurify XSS sanitization & offline Highlight.js multi-language highlighting
 
 ---
 
-## 🎨 Premium Styling Features
+## 🔗 Smart Links & Relative Images
 
-MDReader styles standard HTML and Markdown tags with carefully curated, responsive, eye-friendly typography. 
+- **External link** (opens in your default browser): [MDReader on GitHub](https://github.com/vikbht/mdreader)
+- **Relative Markdown link** (opens in a new MDReader window): [Open README.md](./README.md)
+- **In-page anchor link**: [Jump to Code Blocks](#-code-blocks--copy-button)
 
-### 1. Blockquotes & Emphasis
-Here's a quote that shows how blocks are highlighted with our custom Indigo accent:
+### Local Image Rendering
+Below is a relative local image loaded safely via the custom `mdreader-doc://` scheme handler:
+
+![MDReader App Icon](./src/resources/AppIcon.png)
+
+---
+
+## 🎨 Styling & Tabular Data
 
 > "Simplicity is the ultimate sophistication."
 > — *Leonardo da Vinci*
 
-### 2. Tabular Data Layout
-Our custom styling ensures tabular data is beautifully structured, legible, and responsive:
+| Feature Name | Built-in Support | Native macOS | Notes |
+| :--- | :---: | :---: | :--- |
+| GFM + DOMPurify | Yes | Yes | Strips `<script>` & unsafe event handlers |
+| Multi-Lang Highlighting | Yes | Yes | Highlight.js common bundle |
+| Relative Images & Links | Yes | Yes | Custom `WKURLSchemeHandler` |
+| Atomic-Save Watcher | Yes | Yes | Re-attaches across rename/delete |
+| Find / Zoom / PDF Export | Yes | Yes | `⌘F`, `⌘+`/`⌘-`/`⌘0`, `⌘⇧E` |
 
-| Feature Name | Built-in Support | Native macOS | Speed |
-| :--- | :---: | :---: | :---: |
-| GFM Rendering | Yes | Yes | Instantly |
-| Syntax Highlight | Yes | Yes | Fast |
-| Outline TOC | Yes | Yes | Dynamic |
-| Hot Reloading | Yes | Yes | Real-time |
+<!-- Security test: DOMPurify strips this inline script safely -->
+<script>window.__xssTriggered = true; document.body.innerHTML = 'XSS FAILED';</script>
 
 ---
 
-## 💻 Code Block & Copy Button
+## 💻 Code Blocks & Copy Button
 
-Below is a block of Swift code. MDReader formats code inside a dark terminal layout, applies pastel color syntax highlights, and adds a handy **Copy** button on hover in the top-right corner.
-
+### Swift
 ```swift
 import Cocoa
-import SwiftUI
+import WebKit
 
-// Watch any markdown file natively using GCD Dispatch Sources
-class FileWatcher {
-    private var fileDescriptor: Int32 = -1
-    private var source: DispatchSourceFileSystemObject?
-    
-    init(filePath: String, onUpdate: @escaping () -> Void) {
-        fileDescriptor = open(filePath, O_EVTONLY)
-        guard fileDescriptor >= 0 else { return }
-        
-        source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fileDescriptor,
-            eventMask: .write,
-            queue: DispatchQueue.main
-        )
-        
-        source?.setEventHandler {
-            onUpdate() // Instant Hot-Reload!
-        }
-        source?.resume()
+final class PreviewPanel: NSPanel {
+    func togglePin() {
+        level = (level == .floating) ? .normal : .floating
     }
+}
+```
+
+### Python
+```python
+def reading_time_minutes(text: str, wpm: int = 200) -> int:
+    words = [w for w in text.split() if w]
+    return max(1, round(len(words) / wpm))
+```
+
+### JSON
+```json
+{
+  "app": "MDReader",
+  "version": "1.1.0",
+  "universal": ["arm64", "x86_64"]
 }
 ```
 
 ---
 
-## 🧭 Outline Sidebar Navigation
+## 🧭 Outline & Find Verification
 
-If you click the **List Icon** in the top-right floating header:
-1. A glassmorphic **Outline panel** slides in from the right.
-2. It lists all `h1`, `h2`, and `h3` headings in this document.
-3. Clicking any heading will scroll the page smoothly to that section!
-4. Clicking the dark blurred overlay will slide the sidebar closed.
-
----
-
-## 🔄 How to Verify Hot-Reloading
-
-Let's test the native file watcher!
-1. Keep this MDReader window open on one side of your screen.
-2. Open this file (`test.md`) in any text editor (like VS Code, TextEdit, or vim).
-3. Change this line or write a new paragraph.
-4. Save the file.
-5. Watch the MDReader preview **instantly update** with a smooth fade-in animation!
+1. Press **`⌘⇧O`** (or click the Outline icon) to open the Table of Contents sidebar.
+2. Press **`⌘F`** and type `MDReader` to test in-document search and `↩` / `⇧↩` navigation.
+3. Press **`⌘⇧T`** (or click the Pin icon) to toggle Always-on-Top mode.
+4. Press **`⌘⇧E`** to export a print-styled PDF, or **`Esc`** to dismiss!
