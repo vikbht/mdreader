@@ -11,8 +11,8 @@ permissions:
 
 jobs:
   build:
-    name: Build & Release (Universal)
-    runs-on: macos-14
+    name: Build & Release
+    runs-on: macos-latest
 
     steps:
       - name: Checkout Code
@@ -25,11 +25,12 @@ jobs:
           echo "=== macOS SDK path ==="
           xcode-select -p
 
-      - name: Compile and Package Universal App Bundle
+      - name: Compile and Package App Bundle
         run: |
           chmod +x scripts/build.sh
           ./scripts/build.sh --universal
-          lipo -info build/MDReader.app/Contents/MacOS/MDReader
+          file build/MDReader.app/Contents/MacOS/MDReader
+          codesign --verify --deep --strict build/MDReader.app
 
       - name: Compress App Bundle into Zip
         run: |
@@ -44,22 +45,18 @@ jobs:
           files: MDReader.zip
           draft: false
           prerelease: false
+          generate_release_notes: true
           name: MDReader ${{ github.ref_name || 'Workflow Dispatch Build' }}
           body: |
-            🚀 **MDReader Native macOS Release (Universal: Apple Silicon & Intel)**
+            🚀 **MDReader Native macOS Release**
 
-            This is a fully compiled, signed, and packaged production release of **MDReader**—a lightweight native macOS Markdown previewer.
+            A lightweight, offline-first native macOS Markdown previewer with glassmorphic floating HUD, Mermaid diagrams, KaTeX math, GitHub Alerts, YAML frontmatter cards, themes, and atomic-save hot-reloading.
 
-            ### 📦 Files Included:
-            * **`MDReader.zip`**: Universal macOS app bundle (`arm64` + `x86_64`).
-
-            ### 🛠️ Installation Steps:
+            ### 🛠️ Installation Steps
             1. **Download**: Click `MDReader.zip` below.
             2. **Unzip**: Double-click to extract `MDReader.app`.
             3. **Install**: Drag `MDReader.app` into your **`/Applications/`** folder.
-
-            ### 🖱️ Setup Right-Click Finder Services:
-            The first time you install it, run these commands in Terminal to register the Service with Finder and update context menu caches:
+            4. **Register Finder Services** (one-time in Terminal):
             ```bash
             /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/MDReader.app
             /System/Library/CoreServices/pbs -update
