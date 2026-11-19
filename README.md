@@ -30,7 +30,13 @@
 
 ## 🛠️ Installation
 
-### Option 1: Download Prebuilt Binary
+### Option 1: Homebrew (Recommended)
+```bash
+brew install --cask --no-quarantine vikbht/tap/mdreader
+```
+*Automatically installs `/Applications/MDReader.app` and registers Finder Services (`lsregister` + `pbs`).*
+
+### Option 2: Download Prebuilt Binary
 1. Download the latest `MDReader.zip` from the [GitHub Releases](https://github.com/vikbht/mdreader/releases) page.
 2. Unzip and drag `MDReader.app` into `/Applications/`.
 3. Register the Finder Service once in Terminal:
@@ -39,7 +45,7 @@
    /System/Library/CoreServices/pbs -update
    ```
 
-### Option 2: Build & Install from Source
+### Option 3: Build & Install from Source
 
 **Prerequisites**: macOS 12 Monterey or newer + Xcode Command Line Tools (`swiftc`, `sips`, `iconutil`, `codesign`).
 
@@ -101,8 +107,12 @@ Place any personal CSS rules in `~/.config/mdreader/custom.css` and MDReader wil
 
 ## 🗑️ Uninstallation
 
-Remove `/Applications/MDReader.app` and refresh Finder service caches cleanly:
+If installed via Homebrew:
+```bash
+brew uninstall --cask mdreader
+```
 
+If installed from source:
 ```bash
 ./uninstall.sh
 ```
