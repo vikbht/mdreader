@@ -101,39 +101,53 @@ class FileWatcher {
 // ==========================================================================
 
 struct ResourceManager {
-    static func getResource(name: String, ext: String) -> String? {
-        // Path 1: Inside Bundle Resources folder (Standard App Bundle)
-        if let url = Bundle.main.url(forResource: name, withExtension: ext),
-           let content = try? String(contentsOf: url, encoding: .utf8) {
-            return content
+    static func resourcesDirectoryURL() -> URL? {
+        if let bundleRes = Bundle.main.resourceURL,
+           FileManager.default.fileExists(atPath: bundleRes.appendingPathComponent("template.html").path) {
+            return bundleRes.standardizedFileURL
         }
 
-        // Path 2: Relative to executable path (Developer CLI execution)
         let exeURL = URL(fileURLWithPath: CommandLine.arguments[0])
-        let exeDir = exeURL.deletingLastPathComponent()
-        let relativeURL = exeDir.appendingPathComponent("resources/\(name).\(ext)")
-        if let content = try? String(contentsOf: relativeURL, encoding: .utf8) {
-            return content
+        let relativeDir = exeURL.deletingLastPathComponent().appendingPathComponent("resources")
+        if FileManager.default.fileExists(atPath: relativeDir.appendingPathComponent("template.html").path) {
+            return relativeDir.standardizedFileURL
         }
 
-        // Path 3: Standard macOS App Path Fallback
-        let appURL = URL(fileURLWithPath: "/Applications/MDReader.app/Contents/Resources/\(name).\(ext)")
-        if let content = try? String(contentsOf: appURL, encoding: .utf8) {
-            return content
+        let appDir = URL(fileURLWithPath: "/Applications/MDReader.app/Contents/Resources")
+        if FileManager.default.fileExists(atPath: appDir.appendingPathComponent("template.html").path) {
+            return appDir.standardizedFileURL
         }
 
         return nil
     }
 
+    static func getResource(name: String, ext: String) -> String? {
+        if let dir = resourcesDirectoryURL() {
+            let url = dir.appendingPathComponent("\(name).\(ext)")
+            if let content = try? String(contentsOf: url, encoding: .utf8) {
+                return content
+            }
+        }
+        return nil
+    }
+
+    static func customUserCSS() -> String {
+        let customCSSURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/mdreader/custom.css")
+        return (try? String(contentsOf: customCSSURL, encoding: .utf8)) ?? ""
+    }
+
     static func assembleHTML() -> String {
         let template = getResource(name: "template", ext: "html") ?? defaultTemplate()
         let style = getResource(name: "style", ext: "css") ?? defaultStyle()
+        let customCSS = customUserCSS()
         let marked = getResource(name: "marked.min", ext: "js") ?? ""
         let purify = getResource(name: "purify.min", ext: "js") ?? ""
         let highlight = getResource(name: "highlight.min", ext: "js") ?? ""
 
         var html = template
         html = html.replacingOccurrences(of: "/* CSS placeholder to be dynamically replaced or loaded */", with: style)
+        html = html.replacingOccurrences(of: "/* CUSTOM USER CSS */", with: customCSS)
         html = html.replacingOccurrences(of: "<script id=\"marked-js\"></script>", with: "<script>\n\(marked)\n</script>")
         html = html.replacingOccurrences(of: "<script id=\"purify-js\"></script>", with: "<script>\n\(purify)\n</script>")
         html = html.replacingOccurrences(of: "<script id=\"highlight-js\"></script>", with: "<script>\n\(highlight)\n</script>")
@@ -185,7 +199,7 @@ struct ResourceManager {
 }
 
 // ==========================================================================
-// 3. Local Image Scheme Handler (Enables Relative Local Images Safely)
+// 3. Local & Bundle Asset Scheme Handler (Relative Images + Offline KaTeX/Mermaid)
 // ==========================================================================
 
 class LocalAssetSchemeHandler: NSObject, WKURLSchemeHandler {
@@ -205,6 +219,16 @@ class LocalAssetSchemeHandler: NSObject, WKURLSchemeHandler {
         "tiff": "image/tiff"
     ]
 
+    private static let allowedBundleMimeTypes: [String: String] = [
+        "js": "application/javascript; charset=utf-8",
+        "css": "text/css; charset=utf-8",
+        "woff2": "font/woff2",
+        "woff": "font/woff",
+        "ttf": "font/ttf",
+        "svg": "image/svg+xml",
+        "png": "image/png"
+    ]
+
     static func baseURL(forFilePath filePath: String) -> URL? {
         let dirURL = URL(fileURLWithPath: filePath).deletingLastPathComponent().standardizedFileURL
         var components = URLComponents()
@@ -217,12 +241,44 @@ class LocalAssetSchemeHandler: NSObject, WKURLSchemeHandler {
 
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
         guard let url = urlSchemeTask.request.url,
-              url.scheme == Self.scheme,
-              url.host == "local" else {
+              url.scheme == Self.scheme else {
             urlSchemeTask.didFailWithError(NSError(domain: NSURLErrorDomain, code: NSURLErrorUnsupportedURL))
             return
         }
 
+        if url.host == "bundle" {
+            serveBundleAsset(url: url, task: urlSchemeTask)
+        } else if url.host == "local" {
+            serveLocalImage(url: url, task: urlSchemeTask)
+        } else {
+            urlSchemeTask.didFailWithError(NSError(domain: NSURLErrorDomain, code: NSURLErrorUnsupportedURL))
+        }
+    }
+
+    private func serveBundleAsset(url: URL, task: WKURLSchemeTask) {
+        guard let resourcesDir = ResourceManager.resourcesDirectoryURL() else {
+            task.didFailWithError(NSError(domain: NSURLErrorDomain, code: NSURLErrorFileDoesNotExist))
+            return
+        }
+
+        let relativePath = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let resolvedURL = resourcesDir.appendingPathComponent(relativePath).standardizedFileURL
+        let allowedPrefix = resourcesDir.path.hasSuffix("/") ? resourcesDir.path : resourcesDir.path + "/"
+        let ext = resolvedURL.pathExtension.lowercased()
+
+        // Guard against path traversal and restrict to expected static resource types
+        guard resolvedURL.path.hasPrefix(allowedPrefix),
+              let mimeType = Self.allowedBundleMimeTypes[ext],
+              FileManager.default.fileExists(atPath: resolvedURL.path),
+              let data = try? Data(contentsOf: resolvedURL) else {
+            task.didFailWithError(NSError(domain: NSURLErrorDomain, code: NSURLErrorFileDoesNotExist))
+            return
+        }
+
+        respond(url: url, mimeType: mimeType, data: data, task: task)
+    }
+
+    private func serveLocalImage(url: URL, task: WKURLSchemeTask) {
         let fileURL = URL(fileURLWithPath: url.path).standardizedFileURL
         let ext = fileURL.pathExtension.lowercased()
 
@@ -230,19 +286,38 @@ class LocalAssetSchemeHandler: NSObject, WKURLSchemeHandler {
         guard let mimeType = Self.allowedImageMimeTypes[ext],
               FileManager.default.fileExists(atPath: fileURL.path),
               let data = try? Data(contentsOf: fileURL) else {
-            urlSchemeTask.didFailWithError(NSError(domain: NSURLErrorDomain, code: NSURLErrorFileDoesNotExist))
+            task.didFailWithError(NSError(domain: NSURLErrorDomain, code: NSURLErrorFileDoesNotExist))
             return
         }
 
-        let response = URLResponse(
+        respond(url: url, mimeType: mimeType, data: data, task: task)
+    }
+
+    private func respond(url: URL, mimeType: String, data: Data, task: WKURLSchemeTask) {
+        let headers: [String: String] = [
+            "Content-Type": mimeType,
+            "Content-Length": "\(data.count)",
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "public, max-age=3600"
+        ]
+        if let httpResponse = HTTPURLResponse(
             url: url,
-            mimeType: mimeType,
-            expectedContentLength: data.count,
-            textEncodingName: nil
-        )
-        urlSchemeTask.didReceive(response)
-        urlSchemeTask.didReceive(data)
-        urlSchemeTask.didFinish()
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: headers
+        ) {
+            task.didReceive(httpResponse)
+        } else {
+            let fallback = URLResponse(
+                url: url,
+                mimeType: mimeType,
+                expectedContentLength: data.count,
+                textEncodingName: nil
+            )
+            task.didReceive(fallback)
+        }
+        task.didReceive(data)
+        task.didFinish()
     }
 
     func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
@@ -311,6 +386,8 @@ struct WebView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             hasLoaded = true
+            let savedTheme = UserDefaults.standard.string(forKey: "MDReaderTheme") ?? "glass"
+            webView.evaluateJavaScript("setTheme('\(savedTheme)', false)", completionHandler: nil)
             updateHTMLContent(in: webView)
         }
 
@@ -371,6 +448,12 @@ struct WebView: NSViewRepresentable {
             case "togglePin":
                 DispatchQueue.main.async {
                     self.parent.onTogglePin()
+                }
+            case "setTheme":
+                if let theme = body["theme"] as? String {
+                    DispatchQueue.main.async {
+                        PreviewController.shared.setTheme(theme)
+                    }
                 }
             default:
                 break
@@ -556,6 +639,7 @@ struct FileDropView: View {
 class PreviewPanel: NSPanel {
     weak var webView: WKWebView?
     var sourceFileName: String = "Document"
+    var sourceFilePath: String?
     private(set) var isPinned: Bool = true
 
     init(contentRect: NSRect, contentViewController: NSViewController) {
@@ -598,6 +682,40 @@ class PreviewPanel: NSPanel {
 
     func openFindBar() {
         webView?.evaluateJavaScript("openFindBar()", completionHandler: nil)
+    }
+
+    func applyTheme(_ theme: String) {
+        webView?.evaluateJavaScript("setTheme('\(theme)', false)", completionHandler: nil)
+    }
+
+    func openInDefaultEditor() {
+        guard let path = sourceFilePath else { return }
+        let fileURL = URL(fileURLWithPath: path)
+        let myBundleURL = Bundle.main.bundleURL.standardizedFileURL
+
+        let candidateApps = NSWorkspace.shared.urlsForApplications(toOpen: fileURL)
+            .filter { $0.standardizedFileURL != myBundleURL }
+
+        let preferredBundleNames = [
+            "Cursor.app", "Visual Studio Code.app", "Zed.app",
+            "Sublime Text.app", "Nova.app", "BBEdit.app",
+            "Xcode.app", "TextEdit.app"
+        ]
+
+        let targetApp = preferredBundleNames.compactMap { name in
+            candidateApps.first { $0.lastPathComponent == name }
+        }.first ?? candidateApps.first
+
+        if let appURL = targetApp {
+            NSWorkspace.shared.open([fileURL], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
+        } else {
+            NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+        }
+    }
+
+    func revealInFinder() {
+        guard let path = sourceFilePath else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
 
     func adjustZoom(delta: CGFloat? = nil) {
@@ -721,15 +839,20 @@ class PreviewController: NSObject {
             }
         )
 
-        // Host View Controller
+        // Host View Controller using saved preferred window dimensions
         let hostController = NSHostingController(rootView: contentView)
-        let rect = NSRect(x: 100, y: 100, width: 620, height: 750)
+        let savedWidth = UserDefaults.standard.double(forKey: "MDReaderWindowWidth")
+        let savedHeight = UserDefaults.standard.double(forKey: "MDReaderWindowHeight")
+        let width = (savedWidth >= 550 && savedWidth <= 2400) ? savedWidth : 660
+        let height = (savedHeight >= 600 && savedHeight <= 1800) ? savedHeight : 780
+        let rect = NSRect(x: 100, y: 100, width: width, height: height)
         hostController.preferredContentSize = rect.size
 
         // Create NSPanel
         let panel = PreviewPanel(contentRect: rect, contentViewController: hostController)
         panel.sourceFileName = state.fileName
-        panel.center()
+        panel.sourceFilePath = absolutePath
+        positionCascadedPanel(panel)
         panelRef = panel
 
         // Close the fallback selector if open
@@ -738,15 +861,59 @@ class PreviewController: NSObject {
             fallbackPanel = nil
         }
 
-        // Track window close to clean up resources and NotificationCenter observer
+        // Track window close and resize to clean up resources and persist preferred size
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(windowWillClose(_:)),
             name: NSWindow.willCloseNotification,
             object: panel
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidEndLiveResize(_:)),
+            name: NSWindow.didEndLiveResizeNotification,
+            object: panel
+        )
 
         activePreviews[absolutePath] = (panel, watcher, state)
+    }
+
+    private func positionCascadedPanel(_ panel: PreviewPanel) {
+        panel.center()
+        let openCount = activePreviews.count
+        guard openCount > 0 else { return }
+
+        let step: CGFloat = 28
+        let offsetIndex = CGFloat(openCount % 8)
+        var frame = panel.frame
+        frame.origin.x += offsetIndex * step
+        frame.origin.y -= offsetIndex * step
+
+        if let visible = (panel.screen ?? NSScreen.main)?.visibleFrame {
+            if frame.maxX > visible.maxX {
+                frame.origin.x = visible.minX + 40
+            }
+            if frame.minY < visible.minY {
+                frame.origin.y = visible.maxY - frame.height - 40
+            }
+        }
+        panel.setFrameOrigin(frame.origin)
+    }
+
+    func setTheme(_ theme: String) {
+        let valid: Set<String> = ["glass", "github", "sepia", "nord"]
+        guard valid.contains(theme) else { return }
+        UserDefaults.standard.set(theme, forKey: "MDReaderTheme")
+        for (_, val) in activePreviews {
+            val.panel.applyTheme(theme)
+        }
+    }
+
+    @objc private func windowDidEndLiveResize(_ notification: Notification) {
+        guard let panel = notification.object as? PreviewPanel,
+              panel != fallbackPanel else { return }
+        UserDefaults.standard.set(Double(panel.frame.width), forKey: "MDReaderWindowWidth")
+        UserDefaults.standard.set(Double(panel.frame.height), forKey: "MDReaderWindowHeight")
     }
 
     func openFallbackSelector() {
@@ -814,6 +981,7 @@ class PreviewController: NSObject {
         guard let panel = notification.object as? PreviewPanel else { return }
 
         NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: panel)
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didEndLiveResizeNotification, object: panel)
 
         for (path, val) in activePreviews {
             if val.panel == panel {
@@ -936,6 +1104,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func exportPDFAction(_ sender: Any?) {
         activePreviewPanel?.exportPDF()
     }
+
+    @objc func openInEditorAction(_ sender: Any?) {
+        activePreviewPanel?.openInDefaultEditor()
+    }
+
+    @objc func revealInFinderAction(_ sender: Any?) {
+        activePreviewPanel?.revealInFinder()
+    }
+
+    @objc func selectThemeAction(_ sender: NSMenuItem) {
+        if let theme = sender.representedObject as? String {
+            PreviewController.shared.setTheme(theme)
+        }
+    }
 }
 
 // ==========================================================================
@@ -971,6 +1153,9 @@ func setupMenuBar() {
     let fileSubMenu = NSMenu(title: "File")
     fileMenuItem.submenu = fileSubMenu
     fileSubMenu.addItem(withTitle: "Open...", action: #selector(AppDelegate.openFileAction(_:)), keyEquivalent: "o")
+    fileSubMenu.addItem(withTitle: "Open in Editor", action: #selector(AppDelegate.openInEditorAction(_:)), keyEquivalent: "e")
+    let revealItem = fileSubMenu.addItem(withTitle: "Reveal in Finder", action: #selector(AppDelegate.revealInFinderAction(_:)), keyEquivalent: "r")
+    revealItem.keyEquivalentModifierMask = [.command, .shift]
     fileSubMenu.addItem(NSMenuItem.separator())
     let exportPDFItem = fileSubMenu.addItem(withTitle: "Export as PDF...", action: #selector(AppDelegate.exportPDFAction(_:)), keyEquivalent: "e")
     exportPDFItem.keyEquivalentModifierMask = [.command, .shift]
@@ -997,6 +1182,18 @@ func setupMenuBar() {
     outlineItem.keyEquivalentModifierMask = [.command, .shift]
     let pinItem = viewSubMenu.addItem(withTitle: "Toggle Always on Top", action: #selector(AppDelegate.togglePinAction(_:)), keyEquivalent: "t")
     pinItem.keyEquivalentModifierMask = [.command, .shift]
+    viewSubMenu.addItem(NSMenuItem.separator())
+
+    // Theme Submenu
+    let themeMenuItem = NSMenuItem(title: "Theme", action: nil, keyEquivalent: "")
+    let themeSubMenu = NSMenu(title: "Theme")
+    for (label, value) in [("Glass (Default)", "glass"), ("GitHub", "github"), ("Sepia", "sepia"), ("Nord", "nord")] {
+        let item = themeSubMenu.addItem(withTitle: label, action: #selector(AppDelegate.selectThemeAction(_:)), keyEquivalent: "")
+        item.representedObject = value
+    }
+    themeMenuItem.submenu = themeSubMenu
+    viewSubMenu.addItem(themeMenuItem)
+
     viewSubMenu.addItem(NSMenuItem.separator())
     viewSubMenu.addItem(withTitle: "Zoom In", action: #selector(AppDelegate.zoomInAction(_:)), keyEquivalent: "=")
     viewSubMenu.addItem(withTitle: "Zoom Out", action: #selector(AppDelegate.zoomOutAction(_:)), keyEquivalent: "-")

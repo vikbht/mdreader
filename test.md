@@ -1,41 +1,83 @@
-# MDReader Premium Test Document
+---
+title: MDReader v1.2.0 Showcase
+author: Vikas Bhatia
+date: 2026-11-19
+tags: [macos, swift, markdown, katex, mermaid]
+---
 
-Welcome to your **MDReader** preview! This file exercises headings, lists, tables, multi-language syntax highlighting, relative images, links, and XSS sanitization.
+# MDReader Technical Markdown Showcase
 
-- [x] Lightweight Swift/SwiftUI core (~30MB memory)
-- [x] Glassmorphic translucent backdrop blurs & toggleable Always-on-Top pin
-- [x] Atomic-save-safe hot-reload file watcher with scroll preservation
-- [x] DOMPurify XSS sanitization & offline Highlight.js multi-language highlighting
+Welcome to **MDReader v1.2.0**! Notice how the YAML frontmatter above rendered into a sleek metadata card, and try clicking the **Palette icon** in the top bar to switch between **Glass**, **GitHub**, **Sepia**, and **Nord** themes.
+
+- [x] Offline **Mermaid.js** diagrams (lazy-loaded & theme-adaptive)
+- [x] Offline **KaTeX** LaTeX math with bundled `.woff2` math fonts
+- [x] **GitHub-style Alerts** (`NOTE`, `TIP`, `IMPORTANT`, `WARNING`, `CAUTION`)
+- [x] **YAML Frontmatter** metadata card & custom `~/.config/mdreader/custom.css`
+- [x] Persistent window size, multi-window cascading, and `⌘E` Open in Editor
+
+---
+
+## 🚨 GitHub-Style Alerts
+
+> [!NOTE]
+> Useful context that readers should know—even when skimming quickly.
+
+> [!TIP]
+> Press **`⌘E`** to jump straight into your code editor, or **`⌘⇧R`** to reveal this file in Finder!
+
+> [!IMPORTANT]
+> Both Mermaid and KaTeX are loaded **100% offline** on demand via `mdreader-doc://bundle/`, keeping plain Markdown startup instantaneous.
+
+> [!WARNING]
+> Opening untrusted Markdown files is safe: DOMPurify strips `<script>` tags and unsafe attributes automatically.
+
+> [!CAUTION]
+> Always test custom overrides in `~/.config/mdreader/custom.css` if you heavily restyle the header bar.
+
+---
+
+## 📊 Mermaid Architecture Diagram
+
+```mermaid
+flowchart LR
+    A[Finder / CLI / Drop] --> B[PreviewController]
+    B --> C[FileWatcher<br/>Atomic-Save Safe]
+    B --> D[PreviewPanel<br/>Glass HUD]
+    D --> E[WKWebView]
+    E --> F[marked + DOMPurify]
+    F --> G[Highlight.js]
+    F --> H[KaTeX Math]
+    F --> I[Mermaid SVG]
+    C -. Hot Reload .-> E
+```
+
+---
+
+## 📐 KaTeX Mathematics
+
+Inline math works naturally inside prose—like Euler's identity $e^{i\pi} + 1 = 0$ or the quadratic roots $x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$—without breaking prices like \$5 or \$100.
+
+Display equations render centered with crisp KaTeX math fonts:
+
+$$
+\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}
+$$
+
+$$
+\nabla \times \mathbf{E} = -\frac{\partial \mathbf{B}}{\partial t}, \qquad \sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}
+$$
 
 ---
 
 ## 🔗 Smart Links & Relative Images
 
-- **External link** (opens in your default browser): [MDReader on GitHub](https://github.com/vikbht/mdreader)
-- **Relative Markdown link** (opens in a new MDReader window): [Open README.md](./README.md)
+- **External link** (opens in default browser): [MDReader on GitHub](https://github.com/vikbht/mdreader)
+- **Relative Markdown link** (opens in a cascaded MDReader window): [Open README.md](./README.md)
 - **In-page anchor link**: [Jump to Code Blocks](#-code-blocks--copy-button)
-
-### Local Image Rendering
-Below is a relative local image loaded safely via the custom `mdreader-doc://` scheme handler:
 
 ![MDReader App Icon](./src/resources/AppIcon.png)
 
----
-
-## 🎨 Styling & Tabular Data
-
-> "Simplicity is the ultimate sophistication."
-> — *Leonardo da Vinci*
-
-| Feature Name | Built-in Support | Native macOS | Notes |
-| :--- | :---: | :---: | :--- |
-| GFM + DOMPurify | Yes | Yes | Strips `<script>` & unsafe event handlers |
-| Multi-Lang Highlighting | Yes | Yes | Highlight.js common bundle |
-| Relative Images & Links | Yes | Yes | Custom `WKURLSchemeHandler` |
-| Atomic-Save Watcher | Yes | Yes | Re-attaches across rename/delete |
-| Find / Zoom / PDF Export | Yes | Yes | `⌘F`, `⌘+`/`⌘-`/`⌘0`, `⌘⇧E` |
-
-<!-- Security test: DOMPurify strips this inline script safely -->
+<!-- Security check: DOMPurify strips this inline script safely -->
 <script>window.__xssTriggered = true; document.body.innerHTML = 'XSS FAILED';</script>
 
 ---
@@ -60,21 +102,3 @@ def reading_time_minutes(text: str, wpm: int = 200) -> int:
     words = [w for w in text.split() if w]
     return max(1, round(len(words) / wpm))
 ```
-
-### JSON
-```json
-{
-  "app": "MDReader",
-  "version": "1.1.0",
-  "universal": ["arm64", "x86_64"]
-}
-```
-
----
-
-## 🧭 Outline & Find Verification
-
-1. Press **`⌘⇧O`** (or click the Outline icon) to open the Table of Contents sidebar.
-2. Press **`⌘F`** and type `MDReader` to test in-document search and `↩` / `⇧↩` navigation.
-3. Press **`⌘⇧T`** (or click the Pin icon) to toggle Always-on-Top mode.
-4. Press **`⌘⇧E`** to export a print-styled PDF, or **`Esc`** to dismiss!

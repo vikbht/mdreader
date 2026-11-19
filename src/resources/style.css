@@ -61,6 +61,76 @@
 }
 
 /* ==========================================================================
+   Theme Presets (Glass [default], GitHub, Sepia, Nord)
+   ========================================================================== */
+
+:root {
+  --body-bg: transparent;
+}
+
+/* GitHub Clean Theme */
+html[data-theme="github"] {
+  --body-bg: rgba(255, 255, 255, 0.96);
+  --bg-primary: #ffffff;
+  --bg-secondary: #f6f8fa;
+  --bg-header: rgba(246, 248, 250, 0.92);
+  --bg-code: #24292f;
+  --text-main: #1f2328;
+  --text-muted: #656d76;
+  --accent: #0969da;
+  --accent-light: rgba(9, 105, 218, 0.1);
+  --accent-hover: #0550ae;
+  --border-color: #d0d7de;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-theme="github"] {
+    --body-bg: rgba(13, 17, 23, 0.96);
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-header: rgba(22, 27, 34, 0.92);
+    --bg-code: #161b22;
+    --text-main: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-light: rgba(88, 166, 255, 0.14);
+    --accent-hover: #79c0ff;
+    --border-color: #30363d;
+  }
+}
+
+/* Sepia Reading Theme */
+html[data-theme="sepia"] {
+  --font-sans: "New York", Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+  --body-bg: rgba(247, 241, 227, 0.97);
+  --bg-primary: #f7f1e3;
+  --bg-secondary: rgba(235, 224, 200, 0.72);
+  --bg-header: rgba(242, 234, 215, 0.92);
+  --bg-code: #2c2520;
+  --text-main: #3b2f2f;
+  --text-muted: #78655a;
+  --accent: #b5542b;
+  --accent-light: rgba(181, 84, 43, 0.12);
+  --accent-hover: #923f1c;
+  --border-color: rgba(120, 95, 70, 0.18);
+}
+
+/* Nord Arctic Theme */
+html[data-theme="nord"] {
+  --body-bg: rgba(46, 52, 64, 0.94);
+  --bg-primary: #2e3440;
+  --bg-secondary: rgba(59, 66, 82, 0.78);
+  --bg-header: rgba(46, 52, 64, 0.9);
+  --bg-code: #242933;
+  --text-main: #eceff4;
+  --text-muted: #a5b1c2;
+  --accent: #88c0d0;
+  --accent-light: rgba(136, 192, 208, 0.15);
+  --accent-hover: #8fbcbb;
+  --border-color: rgba(216, 222, 233, 0.12);
+}
+
+/* ==========================================================================
    Basic HTML Elements Setup
    ========================================================================== */
 
@@ -80,7 +150,9 @@ body {
   font-size: 15px;
   line-height: 1.65;
   color: var(--text-main);
-  background-color: transparent; /* VERY IMPORTANT: Let SwiftUI background blur through */
+  background-color: var(--body-bg);
+  min-height: 100vh;
+  transition: background-color 0.25s ease, color 0.25s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
@@ -218,6 +290,80 @@ body {
   background: var(--accent-light);
   border-color: rgba(110, 68, 255, 0.35);
 }
+
+/* Theme Picker Popover */
+.theme-picker-wrap {
+  position: relative;
+}
+
+.theme-menu {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  min-width: 145px;
+  padding: 6px;
+  border-radius: 10px;
+  background-color: var(--bg-header);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.97);
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  z-index: 120;
+}
+
+.theme-menu.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.theme-option:hover {
+  background: var(--bg-secondary);
+}
+
+.theme-option.active {
+  background: var(--accent-light);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.theme-swatch {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  flex-shrink: 0;
+}
+
+.swatch-glass { background: linear-gradient(135deg, #6e44ff, #a78bfa); }
+.swatch-github { background: linear-gradient(135deg, #ffffff 50%, #0d1117 50%); }
+.swatch-sepia { background: linear-gradient(135deg, #f7f1e3 50%, #b5542b 50%); }
+.swatch-nord { background: linear-gradient(135deg, #2e3440 50%, #88c0d0 50%); }
 
 /* ==========================================================================
    In-Document Find Bar
@@ -801,6 +947,160 @@ pre:hover .copy-button {
 }
 
 /* ==========================================================================
+   YAML Frontmatter Metadata Card
+   ========================================================================== */
+
+.frontmatter-card {
+  margin-bottom: 24px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.frontmatter-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.frontmatter-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.frontmatter-key {
+  min-width: 90px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.frontmatter-val {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.frontmatter-tag {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-light);
+  border: 1px solid rgba(110, 68, 255, 0.2);
+}
+
+/* ==========================================================================
+   GitHub-Style Alerts (> [!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION])
+   ========================================================================== */
+
+.markdown-body blockquote.markdown-alert {
+  border-left-width: 4px;
+  border-radius: 0 10px 10px 0;
+  padding: 12px 18px;
+  color: var(--text-main);
+}
+
+.markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  margin-bottom: 6px !important;
+}
+
+.markdown-alert-note {
+  border-left-color: #2f81f7 !important;
+  background: rgba(47, 129, 247, 0.08) !important;
+}
+.markdown-alert-note .markdown-alert-title { color: #2f81f7; }
+
+.markdown-alert-tip {
+  border-left-color: #3fb950 !important;
+  background: rgba(63, 185, 80, 0.08) !important;
+}
+.markdown-alert-tip .markdown-alert-title { color: #3fb950; }
+
+.markdown-alert-important {
+  border-left-color: #a371f7 !important;
+  background: rgba(163, 113, 247, 0.09) !important;
+}
+.markdown-alert-important .markdown-alert-title { color: #a371f7; }
+
+.markdown-alert-warning {
+  border-left-color: #d29922 !important;
+  background: rgba(210, 153, 34, 0.1) !important;
+}
+.markdown-alert-warning .markdown-alert-title { color: #d29922; }
+
+.markdown-alert-caution {
+  border-left-color: #f85149 !important;
+  background: rgba(248, 81, 73, 0.09) !important;
+}
+.markdown-alert-caution .markdown-alert-title { color: #f85149; }
+
+/* ==========================================================================
+   Mermaid Diagrams & KaTeX Math
+   ========================================================================== */
+
+.mermaid-container {
+  margin: 22px 0;
+  padding: 18px;
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  box-shadow: var(--shadow-sm);
+}
+
+.mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-loading {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 12px 0;
+}
+
+.mermaid-error {
+  width: 100%;
+  color: #f85149;
+  font-size: 13px;
+}
+
+.mermaid-error pre {
+  margin-top: 8px;
+  margin-bottom: 0 !important;
+}
+
+.math-display {
+  margin: 18px 0;
+  padding: 8px 4px;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.math-inline .katex {
+  font-size: 1.04em;
+}
+
+/* ==========================================================================
    Print & PDF Export Styling
    ========================================================================== */
 
@@ -811,6 +1111,7 @@ pre:hover .copy-button {
   }
 
   .app-header,
+  .theme-menu,
   .find-bar,
   .toc-sidebar,
   .toc-overlay,

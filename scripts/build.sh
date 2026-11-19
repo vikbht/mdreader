@@ -86,6 +86,8 @@ cp src/resources/style.css "${BUILD_DIR}/Contents/Resources/"
 cp src/resources/marked.min.js "${BUILD_DIR}/Contents/Resources/"
 cp src/resources/purify.min.js "${BUILD_DIR}/Contents/Resources/"
 cp src/resources/highlight.min.js "${BUILD_DIR}/Contents/Resources/"
+cp src/resources/mermaid.min.js "${BUILD_DIR}/Contents/Resources/"
+cp -R src/resources/katex "${BUILD_DIR}/Contents/Resources/"
 
 # 6. Apply deep ad-hoc code signature
 codesign --force --deep --sign - "${BUILD_DIR}"

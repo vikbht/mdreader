@@ -1,11 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="glass">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MDReader Preview</title>
   <style>
     /* CSS placeholder to be dynamically replaced or loaded */
+  </style>
+  <style id="custom-user-css">
+    /* CUSTOM USER CSS */
   </style>
   <script id="marked-js"></script>
   <script id="purify-js"></script>
@@ -27,7 +30,34 @@
         <span class="stat-icon">⏱️</span>
         <span id="stat-time">1 min read</span>
       </div>
-      <button id="pin-toggle" class="icon-button active" title="Toggle Always on Top (⌘⇧T)" aria-label="Toggle Always on Top">
+      <div class="theme-picker-wrap">
+        <button id="theme-toggle" class="icon-button" title="Switch Theme" aria-label="Switch Theme" aria-expanded="false">
+          <span class="icon-svg">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"></circle>
+              <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"></circle>
+              <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"></circle>
+              <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"></circle>
+              <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"></path>
+            </svg>
+          </span>
+        </button>
+        <div id="theme-menu" class="theme-menu" role="menu" aria-hidden="true">
+          <button class="theme-option active" data-theme-choice="glass" role="menuitem">
+            <span class="theme-swatch swatch-glass"></span><span>Glass</span>
+          </button>
+          <button class="theme-option" data-theme-choice="github" role="menuitem">
+            <span class="theme-swatch swatch-github"></span><span>GitHub</span>
+          </button>
+          <button class="theme-option" data-theme-choice="sepia" role="menuitem">
+            <span class="theme-swatch swatch-sepia"></span><span>Sepia</span>
+          </button>
+          <button class="theme-option" data-theme-choice="nord" role="menuitem">
+            <span class="theme-swatch swatch-nord"></span><span>Nord</span>
+          </button>
+        </div>
+      </div>
+      <button id="pin-toggle" class="icon-button active" title="Pinned: Always on Top (⌘⇧T)" aria-label="Toggle Always on Top">
         <span class="icon-svg">
           <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="17" x2="12" y2="22"></line>
@@ -78,9 +108,13 @@
   </main>
 
   <script>
+    const BUNDLE_BASE = 'mdreader-doc://bundle/';
     let hasRenderedOnce = false;
     let findMatches = [];
     let currentMatchIndex = -1;
+    let katexLoadPromise = null;
+    let mermaidLoadPromise = null;
+    let mermaidRenderCounter = 0;
 
     // Native bridge helper
     function postNativeMessage(payload) {
@@ -125,7 +159,93 @@
       }
     }
 
-    // Update pin button visual state (called from Swift or toggle)
+    // =========================================================================
+    // Lazy Asset Loaders (100% Offline via mdreader-doc://bundle/)
+    // =========================================================================
+    function loadScriptOnce(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        document.head.appendChild(script);
+      });
+    }
+
+    function loadStylesheetOnce(href) {
+      if (document.querySelector(`link[href="${href}"]`)) return;
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = href;
+      document.head.appendChild(link);
+    }
+
+    function ensureKaTeX() {
+      if (typeof window.katex !== 'undefined') return Promise.resolve(window.katex);
+      if (!katexLoadPromise) {
+        loadStylesheetOnce(`${BUNDLE_BASE}katex/katex.min.css`);
+        katexLoadPromise = loadScriptOnce(`${BUNDLE_BASE}katex/katex.min.js`)
+          .then(() => window.katex)
+          .catch((err) => {
+            katexLoadPromise = null;
+            throw err;
+          });
+      }
+      return katexLoadPromise;
+    }
+
+    function ensureMermaid() {
+      if (typeof window.mermaid !== 'undefined') return Promise.resolve(window.mermaid);
+      if (!mermaidLoadPromise) {
+        mermaidLoadPromise = loadScriptOnce(`${BUNDLE_BASE}mermaid.min.js`)
+          .then(() => window.mermaid)
+          .catch((err) => {
+            mermaidLoadPromise = null;
+            throw err;
+          });
+      }
+      return mermaidLoadPromise;
+    }
+
+    // =========================================================================
+    // Themes & Appearance
+    // =========================================================================
+    function isEffectiveDarkMode() {
+      const theme = document.documentElement.dataset.theme || 'glass';
+      if (theme === 'nord') return true;
+      if (theme === 'sepia') return false;
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+
+    function setTheme(themeName, persist) {
+      const valid = ['glass', 'github', 'sepia', 'nord'];
+      const chosen = valid.includes(themeName) ? themeName : 'glass';
+      document.documentElement.dataset.theme = chosen;
+
+      document.querySelectorAll('.theme-option').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.themeChoice === chosen);
+      });
+
+      if (persist) {
+        postNativeMessage({ action: 'setTheme', theme: chosen });
+      }
+
+      // Re-render Mermaid diagrams to match the new theme's dark/light palette
+      if (document.querySelector('.mermaid-container')) {
+        renderMermaidDiagrams(document.getElementById('content'));
+      }
+    }
+
+    function closeThemeMenu() {
+      const menu = document.getElementById('theme-menu');
+      const btn = document.getElementById('theme-toggle');
+      if (menu) {
+        menu.classList.remove('open');
+        menu.setAttribute('aria-hidden', 'true');
+      }
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+
     function setPinState(isPinned) {
       const btn = document.getElementById('pin-toggle');
       if (!btn) return;
@@ -146,6 +266,318 @@
     function closeOutline() {
       document.getElementById('toc-sidebar').classList.remove('open');
       document.getElementById('toc-overlay').classList.remove('active');
+    }
+
+    // =========================================================================
+    // YAML Frontmatter Parser & Card Builder
+    // =========================================================================
+    function extractFrontmatter(markdown) {
+      const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+      if (!match) return { metadata: null, body: markdown };
+
+      const rawYaml = match[1];
+      const body = markdown.slice(match[0].length);
+      const metadata = {};
+      const lines = rawYaml.split(/\r?\n/);
+      let activeListKey = null;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+
+        const listItemMatch = line.match(/^\s*-\s+(.*)$/);
+        if (listItemMatch && activeListKey) {
+          if (!Array.isArray(metadata[activeListKey])) {
+            metadata[activeListKey] = [];
+          }
+          metadata[activeListKey].push(stripQuotes(listItemMatch[1].trim()));
+          continue;
+        }
+
+        const kvMatch = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
+        if (kvMatch) {
+          const key = kvMatch[1].trim();
+          const rawVal = kvMatch[2].trim();
+          if (rawVal === '') {
+            metadata[key] = [];
+            activeListKey = key;
+          } else if (rawVal.startsWith('[') && rawVal.endsWith(']')) {
+            const inner = rawVal.slice(1, -1).trim();
+            metadata[key] = inner
+              ? inner.split(',').map((item) => stripQuotes(item.trim())).filter(Boolean)
+              : [];
+            activeListKey = null;
+          } else {
+            metadata[key] = stripQuotes(rawVal);
+            activeListKey = null;
+          }
+        }
+      }
+
+      if (Object.keys(metadata).length === 0) {
+        return { metadata: null, body: markdown };
+      }
+      return { metadata, body };
+    }
+
+    function stripQuotes(val) {
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        return val.slice(1, -1);
+      }
+      return val;
+    }
+
+    function buildFrontmatterCard(metadata) {
+      const card = document.createElement('section');
+      card.className = 'frontmatter-card';
+
+      const entries = Object.entries(metadata);
+      const grid = document.createElement('div');
+      grid.className = 'frontmatter-grid';
+
+      for (const [key, val] of entries) {
+        const row = document.createElement('div');
+        row.className = 'frontmatter-row';
+
+        const keyEl = document.createElement('span');
+        keyEl.className = 'frontmatter-key';
+        keyEl.textContent = key;
+        row.appendChild(keyEl);
+
+        const valEl = document.createElement('div');
+        valEl.className = 'frontmatter-val';
+
+        if (Array.isArray(val)) {
+          val.forEach((item) => {
+            const pill = document.createElement('span');
+            pill.className = 'frontmatter-tag';
+            pill.textContent = String(item);
+            valEl.appendChild(pill);
+          });
+        } else {
+          valEl.textContent = String(val);
+        }
+
+        row.appendChild(valEl);
+        grid.appendChild(row);
+      }
+
+      card.appendChild(grid);
+      return card;
+    }
+
+    // =========================================================================
+    // Math Extraction (Protects LaTeX from Marked's Emphasis Parser)
+    // =========================================================================
+    function extractMathExpressions(markdown) {
+      const mathItems = [];
+      const codePlaceholders = [];
+
+      // 1. Temporarily protect fenced code blocks and inline code spans
+      let protectedText = markdown.replace(/(^|\n)(```|~~~)[^\n]*\n[\s\S]*?\n\2[ \t]*(?=\n|$)/g, (m) => {
+        const idx = codePlaceholders.length;
+        codePlaceholders.push(m);
+        return `@@MDREADERCODEBLOCK${idx}@@`;
+      });
+
+      protectedText = protectedText.replace(/(`+)([^\n`]+?)\1/g, (m) => {
+        const idx = codePlaceholders.length;
+        codePlaceholders.push(m);
+        return `@@MDREADERCODEBLOCK${idx}@@`;
+      });
+
+      // 2. Extract display math $$...$$
+      protectedText = protectedText.replace(/\$\$([\s\S]+?)\$\$/g, (match, expr) => {
+        const trimmed = expr.trim();
+        if (!trimmed) return match;
+        const idx = mathItems.length;
+        mathItems.push({ expr: trimmed, displayMode: true });
+        return `\n\n@@MDREADERMATH${idx}@@\n\n`;
+      });
+
+      // 3. Extract inline math $...$ (avoids currency like "$5 and $10")
+      protectedText = protectedText.replace(/(^|[^\\$])\$(?!\s)([^\n$]+?)(?<!\s)\$(?!\d)/g, (match, prefix, expr) => {
+        const idx = mathItems.length;
+        mathItems.push({ expr: expr.trim(), displayMode: false });
+        return `${prefix}@@MDREADERMATH${idx}@@`;
+      });
+
+      // 4. Restore protected code blocks
+      protectedText = protectedText.replace(/@@MDREADERCODEBLOCK(\d+)@@/g, (_, idx) => codePlaceholders[Number(idx)]);
+
+      return { text: protectedText, mathItems };
+    }
+
+    async function hydrateMathExpressions(container, mathItems) {
+      if (!mathItems || mathItems.length === 0) return;
+
+      try {
+        const katex = await ensureKaTeX();
+        const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+        const nodesToUpdate = [];
+        let node;
+        while ((node = walker.nextNode())) {
+          if (node.nodeValue && node.nodeValue.includes('@@MDREADERMATH')) {
+            nodesToUpdate.push(node);
+          }
+        }
+
+        const tokenRegex = /@@MDREADERMATH(\d+)@@/g;
+        nodesToUpdate.forEach((textNode) => {
+          const text = textNode.nodeValue;
+          const frag = document.createDocumentFragment();
+          let lastIdx = 0;
+          let match;
+          tokenRegex.lastIndex = 0;
+
+          while ((match = tokenRegex.exec(text)) !== null) {
+            if (match.index > lastIdx) {
+              frag.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+            }
+            const item = mathItems[Number(match[1])];
+            if (item) {
+              const rawMathHtml = katex.renderToString(item.expr, {
+                displayMode: item.displayMode,
+                throwOnError: false,
+                trust: false,
+                strict: false
+              });
+              const safeMathHtml = typeof DOMPurify !== 'undefined'
+                ? DOMPurify.sanitize(rawMathHtml, { USE_PROFILES: { html: true, mathMl: true } })
+                : rawMathHtml;
+
+              const wrapper = document.createElement(item.displayMode ? 'div' : 'span');
+              wrapper.className = item.displayMode ? 'math-display' : 'math-inline';
+              wrapper.innerHTML = safeMathHtml;
+              frag.appendChild(wrapper);
+            }
+            lastIdx = match.index + match[0].length;
+          }
+
+          if (lastIdx < text.length) {
+            frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+          }
+          if (textNode.parentNode) {
+            textNode.parentNode.replaceChild(frag, textNode);
+          }
+        });
+      } catch (err) {
+        console.error('KaTeX rendering failed:', err);
+      }
+    }
+
+    // =========================================================================
+    // GitHub-Style Alerts (> [!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION])
+    // =========================================================================
+    const ALERT_CONFIG = {
+      NOTE: {
+        label: 'Note',
+        className: 'markdown-alert-note',
+        icon: '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"></path></svg>'
+      },
+      TIP: {
+        label: 'Tip',
+        className: 'markdown-alert-tip',
+        icon: '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg>'
+      },
+      IMPORTANT: {
+        label: 'Important',
+        className: 'markdown-alert-important',
+        icon: '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm7 2.25v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path></svg>'
+      },
+      WARNING: {
+        label: 'Warning',
+        className: 'markdown-alert-warning',
+        icon: '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575Zm1.763.707a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm.53 3.996v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path></svg>'
+      },
+      CAUTION: {
+        label: 'Caution',
+        className: 'markdown-alert-caution',
+        icon: '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M4.47.22A.749.749 0 0 1 5 0h6c.199 0 .389.079.53.22l4.25 4.25c.141.14.22.331.22.53v6a.749.749 0 0 1-.22.53l-4.25 4.25A.749.749 0 0 1 11 16H5a.749.749 0 0 1-.53-.22L.22 11.53A.749.749 0 0 1 0 11V5c0-.199.079-.389.22-.53Zm.84 1.28L1.5 5.31v5.38l3.81 3.81h5.38l3.81-3.81V5.31L10.69 1.5ZM8 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 4Zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"></path></svg>'
+      }
+    };
+
+    function transformGitHubAlerts(container) {
+      container.querySelectorAll('blockquote').forEach((bq) => {
+        const firstP = bq.querySelector(':scope > p');
+        if (!firstP) return;
+
+        const match = firstP.innerHTML.match(/^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:<br\s*\/?>|\r?\n|\s+)?/i);
+        if (!match) return;
+
+        const type = match[1].toUpperCase();
+        const cfg = ALERT_CONFIG[type];
+        if (!cfg) return;
+
+        bq.classList.add('markdown-alert', cfg.className);
+
+        const titleEl = document.createElement('p');
+        titleEl.className = 'markdown-alert-title';
+        titleEl.innerHTML = `${cfg.icon}<span>${cfg.label}</span>`;
+
+        const remainder = firstP.innerHTML.slice(match[0].length).trim();
+        if (remainder) {
+          firstP.innerHTML = remainder;
+          bq.insertBefore(titleEl, firstP);
+        } else {
+          bq.replaceChild(titleEl, firstP);
+        }
+      });
+    }
+
+    // =========================================================================
+    // Mermaid Diagram Rendering (Lazy-Loaded & Theme-Adaptive)
+    // =========================================================================
+    function prepareMermaidContainers(container) {
+      const blocks = container.querySelectorAll('pre > code.language-mermaid');
+      blocks.forEach((code) => {
+        const pre = code.parentElement;
+        const src = code.textContent.trim();
+        const wrapper = document.createElement('div');
+        wrapper.className = 'mermaid-container';
+        wrapper.dataset.mermaidSrc = src;
+        wrapper.innerHTML = '<div class="mermaid-loading">Rendering diagram…</div>';
+        pre.replaceWith(wrapper);
+      });
+      return blocks.length > 0;
+    }
+
+    async function renderMermaidDiagrams(container) {
+      const containers = container.querySelectorAll('.mermaid-container');
+      if (containers.length === 0) return;
+
+      try {
+        const mermaid = await ensureMermaid();
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: 'strict',
+          theme: isEffectiveDarkMode() ? 'dark' : 'default',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+        });
+
+        for (const el of containers) {
+          const src = el.dataset.mermaidSrc || '';
+          if (!src) continue;
+          const id = `mdreader-mermaid-${++mermaidRenderCounter}`;
+          try {
+            const { svg } = await mermaid.render(id, src);
+            el.innerHTML = svg;
+          } catch (renderErr) {
+            el.innerHTML = '';
+            const errBox = document.createElement('div');
+            errBox.className = 'mermaid-error';
+            const header = document.createElement('strong');
+            header.textContent = 'Mermaid syntax error';
+            const pre = document.createElement('pre');
+            pre.textContent = src;
+            errBox.appendChild(header);
+            errBox.appendChild(pre);
+            el.appendChild(errBox);
+          }
+        }
+      } catch (err) {
+        console.error('Mermaid load failed:', err);
+      }
     }
 
     // =========================================================================
@@ -178,7 +610,10 @@
         acceptNode(node) {
           if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
           const parentTag = node.parentNode && node.parentNode.nodeName;
-          if (parentTag === 'SCRIPT' || parentTag === 'STYLE' || parentTag === 'BUTTON') {
+          if (parentTag === 'SCRIPT' || parentTag === 'STYLE' || parentTag === 'BUTTON' || parentTag === 'SVG') {
+            return NodeFilter.FILTER_REJECT;
+          }
+          if (node.parentElement && node.parentElement.closest('.mermaid-container, .katex')) {
             return NodeFilter.FILTER_REJECT;
           }
           return NodeFilter.FILTER_ACCEPT;
@@ -234,6 +669,7 @@
     }
 
     function openFindBar() {
+      closeThemeMenu();
       const bar = document.getElementById('find-bar');
       const input = document.getElementById('find-input');
       bar.classList.add('open');
@@ -253,23 +689,29 @@
     }
 
     // =========================================================================
-    // Document Rendering
+    // Document Rendering Pipeline
     // =========================================================================
-    function updateContent(base64Markdown, fileName) {
+    async function updateContent(base64Markdown, fileName) {
       try {
-        const markdownText = decodeBase64UTF8(base64Markdown);
+        const rawMarkdown = decodeBase64UTF8(base64Markdown);
         const prevScrollY = window.scrollY;
         const activeFindQuery = document.getElementById('find-bar').classList.contains('open')
           ? document.getElementById('find-input').value
           : '';
 
-        // Update window/header title
+        // 1. Extract optional YAML frontmatter
+        const { metadata, body } = extractFrontmatter(rawMarkdown);
+
+        // 2. Update window/header title
         const displayTitle = fileName || 'Markdown Preview';
         document.getElementById('file-title').textContent = displayTitle;
         document.title = displayTitle;
 
-        // Parse Markdown using marked (GFM enabled) and sanitize via DOMPurify
-        const rawHtml = marked.parse(markdownText, { gfm: true, breaks: false });
+        // 3. Protect math expressions from Marked before parsing
+        const { text: mathProtectedBody, mathItems } = extractMathExpressions(body);
+
+        // 4. Parse Markdown (GFM) and sanitize via DOMPurify
+        const rawHtml = marked.parse(mathProtectedBody, { gfm: true, breaks: false });
         const safeHtml = typeof DOMPurify !== 'undefined'
           ? DOMPurify.sanitize(rawHtml, {
               USE_PROFILES: { html: true },
@@ -277,20 +719,30 @@
             })
           : rawHtml;
 
-        // Fade-in only on initial load to avoid flicker during hot-reloads
+        // 5. Render into DOM (fade-in only on initial load)
         const contentContainer = document.getElementById('content');
         const animClass = hasRenderedOnce ? '' : ' fade-in';
         contentContainer.innerHTML = `<article class="markdown-body${animClass}">${safeHtml}</article>`;
 
-        // Calculate statistics
-        const trimmedText = markdownText.trim();
+        const articleEl = contentContainer.querySelector('article.markdown-body');
+        if (metadata && articleEl) {
+          articleEl.insertBefore(buildFrontmatterCard(metadata), articleEl.firstChild);
+        }
+
+        // 6. Calculate statistics from Markdown body
+        const trimmedText = body.trim();
         const wordCount = trimmedText ? trimmedText.split(/\s+/).filter(w => w.length > 0).length : 0;
         const readTime = Math.max(1, Math.round(wordCount / 200));
-
         document.getElementById('stat-words').textContent = `${wordCount.toLocaleString()} words`;
         document.getElementById('stat-time').textContent = `${readTime} min read`;
 
-        // Process headings to assign GitHub-compatible unique IDs and build TOC
+        // 7. Transform GitHub-style alerts
+        transformGitHubAlerts(contentContainer);
+
+        // 8. Prepare Mermaid diagrams before Highlight.js touches code blocks
+        const hasMermaid = prepareMermaidContainers(contentContainer);
+
+        // 9. Assign GitHub-compatible unique IDs & build Outline TOC
         const allHeadings = contentContainer.querySelectorAll('h1, h2, h3, h4, h5, h6');
         const usedSlugs = new Map();
         allHeadings.forEach((heading, idx) => {
@@ -333,7 +785,7 @@
           closeOutline();
         }
 
-        // Smooth scroll for in-document anchor links
+        // 10. Smooth scroll for in-document anchor links
         contentContainer.querySelectorAll('a[href^="#"]').forEach((anchor) => {
           anchor.addEventListener('click', (e) => {
             const targetId = decodeURIComponent(anchor.getAttribute('href').slice(1));
@@ -345,19 +797,19 @@
           });
         });
 
-        // Mark task list items for clean checkbox styling
+        // 11. Style task list checkboxes
         contentContainer.querySelectorAll('li > input[type="checkbox"]').forEach((checkbox) => {
           checkbox.parentElement.classList.add('task-list-item');
         });
 
-        // Syntax highlight code blocks using Highlight.js
+        // 12. Syntax highlight remaining code blocks via Highlight.js
         if (typeof hljs !== 'undefined') {
           contentContainer.querySelectorAll('pre code').forEach((block) => {
             hljs.highlightElement(block);
           });
         }
 
-        // Add native-backed Copy button and language pill to code blocks
+        // 13. Add native-backed Copy button and language pill to code blocks
         contentContainer.querySelectorAll('pre').forEach((pre) => {
           if (pre.querySelector('.copy-button')) return;
           pre.style.position = 'relative';
@@ -390,7 +842,19 @@
           pre.appendChild(copyButton);
         });
 
-        // Restore scroll position on hot-reloads
+        // 14. Hydrate KaTeX math & Mermaid diagrams lazily (in parallel)
+        const asyncTasks = [];
+        if (mathItems.length > 0) {
+          asyncTasks.push(hydrateMathExpressions(contentContainer, mathItems));
+        }
+        if (hasMermaid) {
+          asyncTasks.push(renderMermaidDiagrams(contentContainer));
+        }
+        if (asyncTasks.length > 0) {
+          await Promise.all(asyncTasks);
+        }
+
+        // 15. Restore scroll position on hot-reloads
         if (hasRenderedOnce) {
           window.scrollTo(0, prevScrollY);
           if (activeFindQuery) {
@@ -417,12 +881,43 @@
     // =========================================================================
     // Event Bindings
     // =========================================================================
-    document.getElementById('toc-toggle').addEventListener('click', toggleOutline);
+    document.getElementById('toc-toggle').addEventListener('click', () => {
+      closeThemeMenu();
+      toggleOutline();
+    });
     document.getElementById('toc-overlay').addEventListener('click', closeOutline);
 
     document.getElementById('pin-toggle').addEventListener('click', () => {
       postNativeMessage({ action: 'togglePin' });
     });
+
+    document.getElementById('theme-toggle').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const menu = document.getElementById('theme-menu');
+      const isOpen = menu.classList.toggle('open');
+      menu.setAttribute('aria-hidden', String(!isOpen));
+      document.getElementById('theme-toggle').setAttribute('aria-expanded', String(isOpen));
+    });
+
+    document.querySelectorAll('.theme-option').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setTheme(btn.dataset.themeChoice, true);
+        closeThemeMenu();
+      });
+    });
+
+    document.addEventListener('click', () => {
+      closeThemeMenu();
+    });
+
+    if (window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if (document.querySelector('.mermaid-container')) {
+          renderMermaidDiagrams(document.getElementById('content'));
+        }
+      });
+    }
 
     document.getElementById('find-input').addEventListener('input', (e) => {
       performFind(e.target.value);
@@ -443,12 +938,17 @@
     document.getElementById('find-next').addEventListener('click', () => jumpToMatch(currentMatchIndex + 1));
     document.getElementById('find-close').addEventListener('click', closeFindBar);
 
-    // Dismiss find bar or outline on Escape before closing the window
+    // Dismiss popovers/find/outline on Escape before closing the window
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        const themeOpen = document.getElementById('theme-menu').classList.contains('open');
         const findOpen = document.getElementById('find-bar').classList.contains('open');
         const tocOpen = document.getElementById('toc-sidebar').classList.contains('open');
-        if (findOpen) {
+        if (themeOpen) {
+          e.preventDefault();
+          e.stopPropagation();
+          closeThemeMenu();
+        } else if (findOpen) {
           e.preventDefault();
           e.stopPropagation();
           closeFindBar();
